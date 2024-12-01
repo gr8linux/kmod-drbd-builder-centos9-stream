@@ -1,0 +1,102 @@
+---
+- name: Build Docker image and extract RPMs
+  hosts: all
+  become: yes
+  vars:
+    docker_image_name: "drbd-rpm-builder"
+    docker_container_name: "drbd-rpm-container"
+    output_directory: "/root/output"
+    ansible_user: ali
+  tasks:
+    - name: Ensure required packages for Docker are installed
+      yum:
+        name:
+          - yum-utils
+          - device-mapper-persistent-data
+          - lvm2
+        state: present
+
+    - name: Remove old Docker packages
+      yum:
+        name:
+          - docker
+          - docker-client
+          - docker-client-latest
+          - docker-common
+          - docker-latest
+          - docker-latest-logrotate
+          - docker-logrotate
+          - docker-engine
+        state: absent
+
+    - name: Install yum-utils
+      yum:
+        name: yum-utils
+        state: present
+
+    - name: Add Docker repository
+      command: >
+        yum-config-manager --add-repo
+        https://download.docker.com/linux/centos/docker-ce.repo
+      args:
+        creates: /etc/yum.repos.d/docker-ce.repo
+
+    - name: Enable Docker CE stable repository
+      command: yum-config-manager --enable docker-ce-stable
+
+    - name: Install Docker Engine
+      yum:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: latest
+
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add user to the Docker group
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+        
+    - name: Copy the Dockerfile to the remote server
+      copy:
+        src: Dockerfile
+        dest: /root/Dockerfile
+
+    - name: Build the Docker image
+      community.docker.docker_image: 
+        name: "{{ docker_image_name }}"
+        build:
+          path: /root
+        source: build        
+        state: present
+
+    - name: Run the Docker container
+      shell: >
+        docker run --name {{ docker_container_name }} {{ docker_image_name }}
+      register: container_run
+      failed_when: "'Error' in container_run.stdout or 'Error' in container_run.stderr"
+      changed_when: "'Successfully' in container_run.stdout"
+
+    - name: Copy RPM files from container to the host
+      shell: >
+        docker cp {{ docker_container_name }}:/root/output {{ output_directory }}
+
+    - name: Remove the Docker container
+      shell: >
+        docker rm -f {{ docker_container_name }}
+      ignore_errors: yes
+
+    - name: List files in the output directory
+      shell: ls -l {{ output_directory }}
+      register: output_files
+
+    - name: Display RPMs in output directory
+      debug:
+        msg: "{{ output_files.stdout_lines }}"
