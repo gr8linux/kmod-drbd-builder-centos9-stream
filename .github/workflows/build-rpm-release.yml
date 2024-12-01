@@ -30,7 +30,7 @@ jobs:
       - name: Copy RPM Files from Container
         run: |
           mkdir -p output
-          docker cp rpm-builder-container:/root/output/RPMS/x86_64/ ./output/
+          docker cp rpm-builder-container:/root/output ./output/
 
       # Step 5: Remove Docker Container
       - name: Remove Docker Container
@@ -48,7 +48,7 @@ jobs:
             Release notes for ${{ github.ref_name }}.
             This release includes the following RPM files:
           artifacts: |
-            output/*.rpm
+            output/RPMS/x86_64/*.rpm
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: false
           prerelease: false
