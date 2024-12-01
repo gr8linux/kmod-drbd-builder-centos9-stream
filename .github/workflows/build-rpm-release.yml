@@ -26,19 +26,29 @@ jobs:
         run: |
           docker run --name rpm-builder-container ${{ github.repository }}:rpm-builder
 
-      # Step 4: Copy RPM Files from Container
+      # Step 4: Debug Files in Container
+      - name: List Files in Container Output Directory
+        run: |
+          docker exec rpm-builder-container ls -lR /root/output
+
+      # Step 5: Copy RPM Files from Container
       - name: Copy RPM Files from Container
         run: |
           mkdir -p output
           docker cp rpm-builder-container:/root/output ./output/
 
-      # Step 5: Remove Docker Container
+      # Step 6: Debug Files on Host
+      - name: List Files in Output Directory
+        run: |
+          ls -lR ./output/
+
+      # Step 7: Remove Docker Container
       - name: Remove Docker Container
         run: |
           docker rm -f rpm-builder-container
         continue-on-error: true
 
-      # Step 6: Upload RPM Files to GitHub Release
+      # Step 8: Upload RPM Files to GitHub Release
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:
@@ -48,7 +58,7 @@ jobs:
             Release notes for ${{ github.ref_name }}.
             This release includes the following RPM files:
           artifacts: |
-            output/RPMS/x86_64/*.rpm
+            ./output/RPMS/x86_64/*.rpm
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: false
           prerelease: false
