@@ -30,7 +30,7 @@ jobs:
       - name: Copy RPM Files from Container
         run: |
           mkdir -p output
-          docker cp rpm-builder-container:/root/output/ ./output/
+          docker cp rpm-builder-container:/root/output/RPMS ./output/
 
       # Step 5: Debug Files on Host
       - name: List Files in Output Directory
