@@ -15,7 +15,7 @@
           - device-mapper-persistent-data
           - lvm2
         state: present
-
+      tags: docker_install
     - name: Remove old Docker packages
       yum:
         name:
@@ -28,21 +28,24 @@
           - docker-logrotate
           - docker-engine
         state: absent
+      tags: docker_install
 
     - name: Install yum-utils
       yum:
         name: yum-utils
         state: present
-
+      tags: docker_install
     - name: Add Docker repository
       command: >
         yum-config-manager --add-repo
         https://download.docker.com/linux/centos/docker-ce.repo
       args:
         creates: /etc/yum.repos.d/docker-ce.repo
+      tags: docker_install
 
     - name: Enable Docker CE stable repository
       command: yum-config-manager --enable docker-ce-stable
+      tags: docker_install
 
     - name: Install Docker Engine
       yum:
@@ -51,23 +54,26 @@
           - docker-ce-cli
           - containerd.io
         state: latest
+      tags: docker_install
 
     - name: Start and enable Docker service
       systemd:
         name: docker
         state: started
         enabled: yes
-
+      tags: docker_install
     - name: Add user to the Docker group
       user:
         name: "{{ ansible_user }}"
         groups: docker
         append: yes
+      tags: docker_install
         
     - name: Copy the Dockerfile to the remote server
       copy:
         src: Dockerfile
         dest: /root/Dockerfile
+      tags: build_image
 
     - name: Build the Docker image
       community.docker.docker_image: 
@@ -76,6 +82,7 @@
           path: /root
         source: build        
         state: present
+      tags: build_image
 
     - name: Run the Docker container
       shell: >
@@ -83,20 +90,25 @@
       register: container_run
       failed_when: "'Error' in container_run.stdout or 'Error' in container_run.stderr"
       changed_when: "'Successfully' in container_run.stdout"
+      tags: build_image
 
     - name: Copy RPM files from container to the host
       shell: >
-        docker cp {{ docker_container_name }}:/root/output {{ output_directory }}
+        docker cp {{ docker_container_name }}:/root/output/RPMS/x86_64/ {{ output_directory }}
+      tags: build_image
 
     - name: Remove the Docker container
       shell: >
         docker rm -f {{ docker_container_name }}
       ignore_errors: yes
+      tags: build_image
 
     - name: List files in the output directory
       shell: ls -l {{ output_directory }}
       register: output_files
+      tags: build_image
 
     - name: Display RPMs in output directory
       debug:
         msg: "{{ output_files.stdout_lines }}"
+      tags: build_image

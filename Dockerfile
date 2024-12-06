@@ -3,8 +3,9 @@ ARG BASE_IMAGE=dokken/centos-stream-9
 FROM $BASE_IMAGE
 
 # Set environment variables for DRBD version, kernel version, and SRPM URL
-ENV LB_KERNEL_VERSION=5.14.0-536.el9.x86_64
-ENV LB_KERNEL_VERSION_NOARC=5.14.0-536.el9
+ENV LB_RELEASE=536
+ENV LB_KERNEL_VERSION=5.14.0-${LB_RELEASE}.el9.x86_64
+ENV LB_KERNEL_VERSION_NOARC=5.14.0-${LB_RELEASE}.el9
 ENV LB_SRPM_URL=https://elrepo.org/linux/elrepo/el9/SRPMS/kmod-drbd9x-9.1.23-1.el9_5.elrepo.src.rpm
 
 # Install necessary build tools and dependencies
@@ -39,7 +40,7 @@ RUN wget -O /root/rpmbuild/SRPMS/kmod-drbd9x.src.rpm ${LB_SRPM_URL}
 RUN rpm -ivh /root/rpmbuild/SRPMS/*.src.rpm
 
 # Update the spec file to include the current kernel version in the Release field
-RUN sed -i "s/^Release:.*/Release: 1.el9.${LB_KERNEL_VERSION_NOARC}/" /root/rpmbuild/SPECS/kmod-drbd9x.spec
+RUN sed -i "s/^Release:.*/Release: 1.el9.${LB_RELEASE}/" /root/rpmbuild/SPECS/kmod-drbd9x.spec
 # Update the spec file with the correct kernel version
 RUN sed -i "s/%{!?kmod_kernel_version: %define kmod_kernel_version .*}/%{!?kmod_kernel_version: %define kmod_kernel_version ${LB_KERNEL_VERSION_NOARC}}/" \
     /root/rpmbuild/SPECS/kmod-drbd9x.spec
