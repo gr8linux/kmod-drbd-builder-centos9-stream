@@ -3,7 +3,8 @@
   hosts: all
   become: yes
   vars:
-    docker_image_name: "drbd-rpm-builder"
+    release: 536
+    docker_image_name: "drbd-rpm-builder-{{ release }}"
     docker_container_name: "drbd-rpm-container"
     output_directory: "/root/output"
     ansible_user: ali
@@ -92,7 +93,7 @@
       changed_when: "'Successfully' in container_run.stdout"
       tags: build_image
 
-    - name: Copy RPM files from container to the host
+    - name: Copy RPM files from container to the host as rpm
       shell: >
         docker cp {{ docker_container_name }}:/root/output/RPMS/x86_64/ {{ output_directory }}
       tags: build_image
