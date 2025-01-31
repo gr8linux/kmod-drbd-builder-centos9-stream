@@ -3,7 +3,7 @@ ARG BASE_IMAGE=dokken/centos-stream-9
 FROM $BASE_IMAGE
 
 # Set environment variables for DRBD version, kernel version, and SRPM URL
-ENV LB_RELEASE=536
+ENV LB_RELEASE=554
 ENV LB_KERNEL_VERSION=5.14.0-${LB_RELEASE}.el9.x86_64
 ENV LB_KERNEL_VERSION_NOARC=5.14.0-${LB_RELEASE}.el9
 ENV LB_SRPM_URL=https://elrepo.org/linux/elrepo/el9/SRPMS/kmod-drbd9x-9.1.23-1.el9_5.elrepo.src.rpm

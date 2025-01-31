@@ -3,7 +3,7 @@
   hosts: all
   become: yes
   vars:
-    release: 536
+    release: 554
     docker_image_name: "drbd-rpm-builder-{{ release }}"
     docker_container_name: "drbd-rpm-container"
     output_directory: "/root/output"
