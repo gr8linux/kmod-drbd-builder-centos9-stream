@@ -1,14 +1,24 @@
 # Use CentOS Stream 9 as the base image
-ARG BASE_IMAGE=dokken/centos-stream-9
-FROM $BASE_IMAGE
+FROM dokken/centos-stream-9
 
-# Set environment variables for DRBD version, kernel version, and SRPM URL
-ENV LB_RELEASE=554
-ENV LB_KERNEL_VERSION=5.14.0-${LB_RELEASE}.el9.x86_64
-ENV LB_KERNEL_VERSION_NOARC=5.14.0-${LB_RELEASE}.el9
-ENV LB_SRPM_URL=https://elrepo.org/linux/elrepo/el9/SRPMS/kmod-drbd9x-9.1.23-1.el9_5.elrepo.src.rpm
+# Build arguments with defaults
+ARG DRBD_VERSION=9.1.23
+ARG DRBD_RELEASE=1
+ARG EL_VERSION=9
 
-# Install necessary build tools and dependencies
+# Runtime environment variables
+ENV DRBD_VERSION=${DRBD_VERSION}
+ENV DRBD_RELEASE=${DRBD_RELEASE}
+ENV EL_VERSION=${EL_VERSION}
+ENV ELREPO_URL="https://elrepo.org/linux/elrepo/el${EL_VERSION}/SRPMS"
+ENV OUTPUT_DIR="/root/output"
+ENV RPMBUILD_DIR="/root/rpmbuild"
+
+# Copy build scripts
+COPY scripts/build-drbd.sh /usr/local/bin/
+COPY scripts/get-kernels.sh /usr/local/bin/
+
+# Install base dependencies
 RUN dnf -y update-minimal --security --sec-severity=Important --sec-severity=Critical && \
     dnf install -y \
         cpio \
@@ -20,44 +30,20 @@ RUN dnf -y update-minimal --security --sec-severity=Important --sec-severity=Cri
         wget \
         rpm-build \
         redhat-rpm-config \
-        kernel-devel-${LB_KERNEL_VERSION} \
-        kernel-headers-${LB_KERNEL_VERSION} \
         epel-release \
         kernel-abi-stablelists \
         kernel-rpm-macros \
-    && dnf clean all -y
+        dnf-utils \
+    && dnf clean all -y \
+    && chmod +x /usr/local/bin/build-drbd.sh \
+    && chmod +x /usr/local/bin/get-kernels.sh
 
-# Working directory for building the RPM
-WORKDIR /root/rpmbuild
+# Create directory structure
+RUN mkdir -p ${RPMBUILD_DIR}/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} \
+    && mkdir -p ${OUTPUT_DIR}
 
-# Create the rpmbuild directory structure
-RUN mkdir -p /root/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+WORKDIR ${RPMBUILD_DIR}
 
-# Download the SRPM file
-RUN wget -O /root/rpmbuild/SRPMS/kmod-drbd9x.src.rpm ${LB_SRPM_URL}
-
-# Install the SRPM to extract its contents
-RUN rpm -ivh /root/rpmbuild/SRPMS/*.src.rpm
-
-# Update the spec file to include the current kernel version in the Release field
-RUN sed -i "s/^Release:.*/Release: 1.el9.${LB_RELEASE}/" /root/rpmbuild/SPECS/kmod-drbd9x.spec
-# Update the spec file with the correct kernel version
-RUN sed -i "s/%{!?kmod_kernel_version: %define kmod_kernel_version .*}/%{!?kmod_kernel_version: %define kmod_kernel_version ${LB_KERNEL_VERSION_NOARC}}/" \
-    /root/rpmbuild/SPECS/kmod-drbd9x.spec
-
-# Build the RPMs
-RUN rpmbuild -ba /root/rpmbuild/SPECS/kmod-drbd9x.spec
-
-# Create an output directory for the built RPMs
-RUN mkdir -p /root/output
-
-# Copy the built RPMs and SRPMs to the output directory
-RUN cp -r /root/rpmbuild/RPMS /root/output && \
-    cp -r /root/rpmbuild/SRPMS /root/output
-
-# Set the output directory as the working directory
-WORKDIR /root/output
-
-# Default command to list the built RPMs
-CMD ["ls", "-l", "/root/output"]
+# Default command to build DRBD modules
+ENTRYPOINT ["/usr/local/bin/build-drbd.sh"]
 
