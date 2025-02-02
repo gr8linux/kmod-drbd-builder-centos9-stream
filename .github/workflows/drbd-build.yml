@@ -127,10 +127,14 @@ jobs:
           files: |
             ./*.rpm
 
+      - name: Generate timestamp
+        id: timestamp
+        run: echo "timestamp=$(date +'%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: drbd-modules-$(date +'%Y%m%d-%H%M')
+          name: drbd-modules-${{ steps.timestamp.outputs.timestamp }}
           path: |
             output/RPMS/x86_64/*.rpm
             output/build_report.md
