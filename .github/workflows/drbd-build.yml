@@ -18,6 +18,8 @@ on:
       - 'Dockerfile'
       - 'scripts/**'
       - '.github/workflows/drbd-build.yml'
+      - '.kernel-versions'
+      - '**.sh'
 
 jobs:
   check-kernel-versions:
@@ -43,25 +45,34 @@ jobs:
       - name: Get latest kernel versions
         id: check-versions
         run: |
-          # Build only the version-checker stage
+          # Debug output
+          echo "Building version-checker..."
           docker build \
             --target version-checker \
             --build-arg EL_MINOR_VERSION=${{ github.event.inputs.el_minor_version || '5' }} \
             -t kernel-checker .
+          
+          echo "Getting current versions..."
           CURRENT_VERSIONS=$(docker run --rm kernel-checker /usr/local/bin/get-kernels.sh)
+          echo "Current versions: $CURRENT_VERSIONS"
           
           # Get previously built versions
           PREV_VERSIONS=""
           if [ -f ".kernel-versions" ]; then
             PREV_VERSIONS=$(cat .kernel-versions)
+            echo "Previous versions: $PREV_VERSIONS"
+          else
+            echo "No previous versions file found"
           fi
           
           # Compare versions
           if [ "$CURRENT_VERSIONS" != "$PREV_VERSIONS" ] || [ "${{ github.event.inputs.force_build }}" == "true" ]; then
+            echo "Changes detected or force build enabled"
             echo "kernel_changed=true" >> $GITHUB_OUTPUT
             echo "kernel_versions=$CURRENT_VERSIONS" >> $GITHUB_OUTPUT
             echo "$CURRENT_VERSIONS" > .kernel-versions
           else
+            echo "No changes detected and force build not enabled"
             echo "kernel_changed=false" >> $GITHUB_OUTPUT
             echo "kernel_versions=$CURRENT_VERSIONS" >> $GITHUB_OUTPUT
           fi
