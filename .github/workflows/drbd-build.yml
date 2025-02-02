@@ -29,8 +29,8 @@ jobs:
       - name: Get latest kernel versions
         id: check-versions
         run: |
-          # Create a temporary container to get kernel versions
-          docker build -t kernel-checker --target base .
+          # Build the full image but only use it for checking versions
+          docker build -t kernel-checker .
           CURRENT_VERSIONS=$(docker run --rm kernel-checker /usr/local/bin/get-kernels.sh)
           
           # Get previously built versions
@@ -40,7 +40,7 @@ jobs:
           fi
           
           # Compare versions
-          if [ "$CURRENT_VERSIONS" != "$PREV_VERSIONS" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          if [ "$CURRENT_VERSIONS" != "$PREV_VERSIONS" ] || [ "${{ github.event.inputs.force_build }}" == "true" ]; then
             echo "kernel_changed=true" >> $GITHUB_OUTPUT
             echo "kernel_versions=$CURRENT_VERSIONS" >> $GITHUB_OUTPUT
             echo "$CURRENT_VERSIONS" > .kernel-versions
