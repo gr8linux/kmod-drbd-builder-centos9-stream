@@ -119,22 +119,21 @@ jobs:
         with:
           tag_name: build-${{ github.run_number }}
           name: Build ${{ github.run_number }}
-          body: |
-            DRBD kernel modules build for kernel versions:
-            ${{ needs.check-kernel-versions.outputs.kernel_versions }}
+          body_path: output/build_report.md
+          files: |
+            output/RPMS/x86_64/*.rpm
           draft: false
           prerelease: false
-          files: |
-            ./*.rpm
 
       - name: Generate timestamp
         id: timestamp
         run: echo "timestamp=$(date +'%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
 
       - name: Upload build artifacts
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: drbd-modules-${{ steps.timestamp.outputs.timestamp }}
+          name: drbd-rpms
           path: |
             output/RPMS/x86_64/*.rpm
             output/build_report.md
