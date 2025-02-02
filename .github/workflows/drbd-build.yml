@@ -112,17 +112,20 @@ jobs:
           } > output/build_report.md
 
       - name: Create Release
+        id: create_release
         uses: softprops/action-gh-release@v1
-        with:
-          name: "Kernel Modules Build $(date +'%Y-%m-%d')"
-          tag_name: "build-$(date +'%Y%m%d-%H%M')"
-          body_path: output/build_report.md
-          files: |
-            output/RPMS/x86_64/*.rpm
-          draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Build ${{ github.run_number }}
+          body: |
+            DRBD kernel modules build for kernel versions:
+            ${{ needs.check-kernel-versions.outputs.kernel_versions }}
+          draft: false
+          prerelease: false
+          files: |
+            ./*.rpm
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
