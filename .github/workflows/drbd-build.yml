@@ -29,7 +29,7 @@ jobs:
     steps:
       - name: Download DRBD SRPM
         run: |
-          SRPM_URL="https://elrepo.org/linux/elrepo/el9/SRPMS/kmod-drbd9x-9.1.23-1.el9_{{ inputs.el_minor_version }}.elrepo.src.rpm"
+          SRPM_URL="https://elrepo.org/linux/elrepo/el9/SRPMS/kmod-drbd9x-9.1.23-1.el9_${{ github.event.inputs.el_minor_version || '5' }}.elrepo.src.rpm"
           echo "Downloading SRPM from: $SRPM_URL"
           curl -L -o drbd.src.rpm "$SRPM_URL"
           if [ $? -ne 0 ]; then
