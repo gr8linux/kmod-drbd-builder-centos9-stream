@@ -1,96 +1,156 @@
-# kmod-drbd-builder-centos9-stream
+# DRBD Kernel Module Builder for CentOS Stream 9
 
-A repository for building custom **kmod-drbd** kernel modules for **CentOS 9 Stream** using Docker and Ansible. This project automates the process of downloading, building, and packaging RPM files for the DRBD kernel module.
+Automated build system for DRBD kernel modules supporting multiple CentOS Stream 9 kernel versions. This project uses Docker and GitHub Actions to automatically build and release DRBD kernel modules when new kernel versions are released.
 
 ## Features
 
-- Builds DRBD kernel module (`kmod-drbd`) for a specified kernel version.
-- Uses Docker to create an isolated build environment.
-- Provides an Ansible playbook for remote builds.
-- Outputs RPM packages ready for installation.
+- 🔄 Automatic builds every 12 hours via GitHub Actions
+- 🎯 Supports multiple kernel versions simultaneously
+- 📦 Generates RPM packages for each kernel version
+- 🚀 Docker-based build environment for consistency
+- 📋 Detailed build reports and metadata
+- 🔧 Configurable EL minor versions
 
----
+## Quick Start
 
-## Getting Started
+### Local Build
 
-### Prerequisites
-
-- **Docker**: Ensure Docker is installed and running on your system.
-- **Ansible**: Required to run the included Ansible playbook.
-
-### Clone the Repository
-
+1. Clone the repository:
 ```bash
-git clone https://github.com/<your-username>/kmod-drbd-builder-centos9-stream.git
+git clone https://github.com/gr8linux/kmod-drbd-builder-centos9-stream.git
 cd kmod-drbd-builder-centos9-stream
 ```
 
----
+2. Build using Docker:
+```bash
+# Build with default settings
+docker build -t drbd-builder .
+docker run --rm -v $(pwd)/output:/root/output drbd-builder
 
-## Usage
-
-### Using Docker
-
-1. Build the Docker image:
-   ```bash
-   docker build -t kmod-drbd-builder .
-   ```
-
-2. Run the container to build the RPMs:
-   ```bash
-   docker run --rm -v $(pwd)/output:/root/output kmod-drbd-builder
-   ```
-
-3. The built RPMs will be available in the `output/` directory.
-
----
+# Build with specific EL minor version
+docker build -t drbd-builder \
+    --build-arg EL_MINOR_VERSION=5 \
+    .
+```
 
 ### Using Ansible
 
-1. Update the Ansible playbook (`build-rpm.yml`) with the desired configuration.
+1. Update inventory file with your target hosts:
+```ini
+[build_servers]
+build-server ansible_host=your-server.example.com
+```
 
-2. Run the playbook to build the RPMs remotely:
-   ```bash
-   ansible-playbook build-rpm.yml -e "docker_image_name=kmod-drbd-builder docker_container_name=kmod-drbd-container output_directory=/path/to/output"
-   ```
+2. Run the playbook:
+```bash
+ansible-playbook -i inventory build_drbd_rpm.yml
+```
 
-3. The built RPMs will be copied to the specified `output_directory`.
+## Build Methods
 
----
+### 1. GitHub Actions Workflow
 
-## Repository Structure
+The project supports three build trigger methods:
+
+1. **Scheduled Builds**
+   - Runs automatically every 12 hours
+   - Checks for new kernel versions
+   - Uploads artifacts to GitHub
+
+2. **Manual Trigger**
+   - Go to Actions → "DRBD Kernel Module Builder"
+   - Click "Run workflow"
+   - Optionally specify:
+     - Force build (even if no new kernel version)
+     - EL Minor Version (e.g., 5 for el9_5)
+
+3. **Push Triggers**
+   - Triggered by changes to:
+     - Dockerfile
+     - scripts/**
+     - .github/workflows/drbd-build.yml
+     - .kernel-versions
+     - **.sh
+
+### 2. Local Development
+
+Build and test locally using Docker:
+
+```bash
+# Build image
+docker build -t drbd-builder .
+
+# Run with default settings
+docker run --rm -v $(pwd)/output:/root/output drbd-builder
+
+# Run with specific EL minor version
+docker run --rm \
+    --build-arg EL_MINOR_VERSION=5 \
+    -v $(pwd)/output:/root/output \
+    drbd-builder
+```
+
+## Project Structure
 
 ```
 .
-├── Dockerfile                # Dockerfile to build the kmod-drbd RPM
-├── build-rpm.yml             # Ansible playbook for remote builds
-├── output/                   # Directory for storing built RPMs
 ├── .github/
 │   └── workflows/
-│       └── build-rpm.yml     # GitHub Actions workflow
-├── README.md                 # Project documentation
+│       ├── drbd-build.yml        # Main build workflow
+│       └── build-rpm-release.yml # Release workflow
+├── scripts/
+│   ├── build-drbd.sh            # Main build script
+│   └── get-kernels.sh           # Kernel version detection
+├── Dockerfile                   # Build environment definition
+├── build_drbd_rpm.yml          # Ansible playbook
+└── README.md                   # This file
 ```
 
----
+## Configuration
 
-## Variables
+### Build Arguments
 
-- **LB_KERNEL_VERSION**: The target kernel version for which the DRBD module is built.
-- **LB_SRPM_URL**: URL to the DRBD source RPM.
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `EL_MINOR_VERSION` | EL Minor Version (e.g., 5 for el9_5) | 5 |
 
----
+## Output
+
+The build process generates:
+
+1. **RPM Packages**
+   - DRBD kernel modules for each kernel version
+   - Located in `output/RPMS/x86_64/`
+
+2. **Build Reports**
+   - Build status for each kernel version
+   - Located in `output/build_report.md`
 
 ## Contributing
 
-1. Fork the repository.
-2. Create a new branch (```bash git checkout -b feature/your-feature ```).
-3. Commit your changes (```bash git commit -m 'Add your feature' ```).
-4. Push to the branch (```bash git push origin feature/your-feature ```).
-5. Open a pull request.
-
----
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+- Open an issue for bug reports or feature requests
+- Pull requests are welcome
+- For questions, please use GitHub Discussions
+
+## Acknowledgments
+
+- LINBIT for DRBD development
+- CentOS Stream community
+- Contributors to this project
+
+## Security
+
+Please report security vulnerabilities to security@your-domain.com or via GitHub's security advisory feature.
 

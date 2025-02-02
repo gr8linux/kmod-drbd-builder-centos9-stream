@@ -1,14 +1,33 @@
-# Use CentOS Stream 9 as the base image
-ARG BASE_IMAGE=dokken/centos-stream-9
-FROM $BASE_IMAGE
+# Base stage for checking kernel versions
+FROM dokken/centos-stream-9 AS version-checker
 
-# Set environment variables for DRBD version, kernel version, and SRPM URL
-ENV LB_RELEASE=554
-ENV LB_KERNEL_VERSION=5.14.0-${LB_RELEASE}.el9.x86_64
-ENV LB_KERNEL_VERSION_NOARC=5.14.0-${LB_RELEASE}.el9
-ENV LB_SRPM_URL=https://elrepo.org/linux/elrepo/el9/SRPMS/kmod-drbd9x-9.1.23-1.el9_5.elrepo.src.rpm
+RUN dnf install -y dnf-utils yum-utils && \
+    dnf clean all -y
 
-# Install necessary build tools and dependencies
+COPY scripts/get-kernels.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/get-kernels.sh
+
+# Main build stage
+FROM dokken/centos-stream-9
+
+# Build arguments with defaults
+ARG DRBD_VERSION=9.1.23
+ARG DRBD_RELEASE=1
+ARG EL_VERSION=9
+ARG EL_MINOR_VERSION=5  # Added for CentOS Stream 9.5
+
+# Runtime environment variables
+ENV DRBD_VERSION=${DRBD_VERSION}
+ENV DRBD_RELEASE=${DRBD_RELEASE}
+ENV EL_VERSION=${EL_VERSION}
+ENV EL_MINOR_VERSION=${EL_MINOR_VERSION}
+ENV ELREPO_URL="https://elrepo.org/linux/elrepo/el${EL_VERSION}/SRPMS"
+ENV OUTPUT_DIR="/root/output"
+ENV RPMBUILD_DIR="/root/rpmbuild"
+ENV KERNEL_VERSION_FILE="/tmp/kernel_versions.txt"
+ENV SRPM_NAME="kmod-drbd9x-${DRBD_VERSION}-${DRBD_RELEASE}.el${EL_VERSION}_${EL_MINOR_VERSION}.elrepo.src.rpm"
+
+# Install base dependencies and set up repositories
 RUN dnf -y update-minimal --security --sec-severity=Important --sec-severity=Critical && \
     dnf install -y \
         cpio \
@@ -20,44 +39,37 @@ RUN dnf -y update-minimal --security --sec-severity=Important --sec-severity=Cri
         wget \
         rpm-build \
         redhat-rpm-config \
-        kernel-devel-${LB_KERNEL_VERSION} \
-        kernel-headers-${LB_KERNEL_VERSION} \
         epel-release \
         kernel-abi-stablelists \
         kernel-rpm-macros \
+        dnf-utils \
+        yum-utils \
+    && dnf config-manager --set-enabled crb \
     && dnf clean all -y
 
-# Working directory for building the RPM
-WORKDIR /root/rpmbuild
+# Copy build scripts
+COPY scripts/build-drbd.sh /usr/local/bin/
+COPY scripts/get-kernels.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/build-drbd.sh \
+    && chmod +x /usr/local/bin/get-kernels.sh
 
-# Create the rpmbuild directory structure
-RUN mkdir -p /root/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+# Create directory structure
+RUN mkdir -p ${RPMBUILD_DIR}/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} \
+    && mkdir -p ${OUTPUT_DIR}
 
-# Download the SRPM file
-RUN wget -O /root/rpmbuild/SRPMS/kmod-drbd9x.src.rpm ${LB_SRPM_URL}
+WORKDIR ${RPMBUILD_DIR}
 
-# Install the SRPM to extract its contents
-RUN rpm -ivh /root/rpmbuild/SRPMS/*.src.rpm
+# Download and install SRPM
+RUN wget -O ${RPMBUILD_DIR}/SRPMS/kmod-drbd9x.src.rpm \
+        ${ELREPO_URL}/${SRPM_NAME} || \
+        (echo "Failed to download SRPM: ${ELREPO_URL}/${SRPM_NAME}" && exit 1) && \
+    rpm -ivh ${RPMBUILD_DIR}/SRPMS/kmod-drbd9x.src.rpm
 
-# Update the spec file to include the current kernel version in the Release field
-RUN sed -i "s/^Release:.*/Release: 1.el9.${LB_RELEASE}/" /root/rpmbuild/SPECS/kmod-drbd9x.spec
-# Update the spec file with the correct kernel version
-RUN sed -i "s/%{!?kmod_kernel_version: %define kmod_kernel_version .*}/%{!?kmod_kernel_version: %define kmod_kernel_version ${LB_KERNEL_VERSION_NOARC}}/" \
-    /root/rpmbuild/SPECS/kmod-drbd9x.spec
+# Create build report directory
+RUN mkdir -p ${OUTPUT_DIR}/reports
 
-# Build the RPMs
-RUN rpmbuild -ba /root/rpmbuild/SPECS/kmod-drbd9x.spec
+# Set working directory to RPMBUILD_DIR
+WORKDIR ${RPMBUILD_DIR}
 
-# Create an output directory for the built RPMs
-RUN mkdir -p /root/output
-
-# Copy the built RPMs and SRPMs to the output directory
-RUN cp -r /root/rpmbuild/RPMS /root/output && \
-    cp -r /root/rpmbuild/SRPMS /root/output
-
-# Set the output directory as the working directory
-WORKDIR /root/output
-
-# Default command to list the built RPMs
-CMD ["ls", "-l", "/root/output"]
-
+# Default command to build DRBD modules
+ENTRYPOINT ["/usr/local/bin/build-drbd.sh"]
