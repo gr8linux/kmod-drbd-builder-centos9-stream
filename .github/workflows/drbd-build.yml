@@ -9,6 +9,10 @@ on:
         description: 'Force build even if no new kernel version'
         type: boolean
         default: false
+      el_minor_version:
+        description: 'EL Minor Version (e.g., 5 for el9_5)'
+        type: string
+        default: '5'
   push:
     paths:
       - 'Dockerfile'
@@ -29,8 +33,11 @@ jobs:
       - name: Get latest kernel versions
         id: check-versions
         run: |
-          # Build the full image but only use it for checking versions
-          docker build -t kernel-checker .
+          # Build only the version-checker stage
+          docker build \
+            --target version-checker \
+            --build-arg EL_MINOR_VERSION=${{ github.event.inputs.el_minor_version || '5' }} \
+            -t kernel-checker .
           CURRENT_VERSIONS=$(docker run --rm kernel-checker /usr/local/bin/get-kernels.sh)
           
           # Get previously built versions
@@ -67,6 +74,8 @@ jobs:
           context: .
           load: true
           tags: drbd-builder:latest
+          build-args: |
+            EL_MINOR_VERSION=${{ github.event.inputs.el_minor_version || '5' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
