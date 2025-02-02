@@ -15,7 +15,7 @@ cleanup() {
 
 # Function to download SRPM
 download_srpm() {
-    local srpm_name="kmod-drbd9x-${DRBD_VERSION}-${DRBD_RELEASE}.el${EL_VERSION}.elrepo.src.rpm"
+    local srpm_name="kmod-drbd9x-${DRBD_VERSION}-${DRBD_RELEASE}.el${EL_VERSION}_${EL_MINOR_VERSION}.elrepo.src.rpm"
     log "Downloading SRPM: ${srpm_name}"
     wget -O ${RPMBUILD_DIR}/SRPMS/kmod-drbd9x.src.rpm ${ELREPO_URL}/${srpm_name}
     rpm -ivh ${RPMBUILD_DIR}/SRPMS/kmod-drbd9x.src.rpm
