@@ -4,12 +4,12 @@ Automated build system for DRBD kernel modules supporting multiple CentOS Stream
 
 ## Features
 
-- 🔄 Automatic weekly builds via GitHub Actions
+- 🔄 Automatic builds every 12 hours via GitHub Actions
 - 🎯 Supports multiple kernel versions simultaneously
 - 📦 Generates RPM packages for each kernel version
 - 🚀 Docker-based build environment for consistency
 - 📋 Detailed build reports and metadata
-- 🔧 Configurable DRBD versions and releases
+- 🔧 Configurable EL minor versions
 
 ## Quick Start
 
@@ -17,8 +17,8 @@ Automated build system for DRBD kernel modules supporting multiple CentOS Stream
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/<your-username>/drbd-kernel-builder.git
-cd drbd-kernel-builder
+git clone https://github.com/gr8linux/kmod-drbd-builder-centos9-stream.git
+cd kmod-drbd-builder-centos9-stream
 ```
 
 2. Build using Docker:
@@ -27,10 +27,9 @@ cd drbd-kernel-builder
 docker build -t drbd-builder .
 docker run --rm -v $(pwd)/output:/root/output drbd-builder
 
-# Build with specific DRBD version
+# Build with specific EL minor version
 docker build -t drbd-builder \
-    --build-arg DRBD_VERSION=9.1.23 \
-    --build-arg DRBD_RELEASE=1 \
+    --build-arg EL_MINOR_VERSION=5 \
     .
 ```
 
@@ -54,22 +53,24 @@ ansible-playbook -i inventory build_drbd_rpm.yml
 The project supports three build trigger methods:
 
 1. **Scheduled Builds**
-   - Runs automatically every Sunday
+   - Runs automatically every 12 hours
    - Checks for new kernel versions
    - Uploads artifacts to GitHub
 
 2. **Manual Trigger**
-   - Go to Actions → "DRBD RPM Build and Release"
+   - Go to Actions → "DRBD Kernel Module Builder"
    - Click "Run workflow"
-   - Optionally specify DRBD version and release
+   - Optionally specify:
+     - Force build (even if no new kernel version)
+     - EL Minor Version (e.g., 5 for el9_5)
 
-3. **Release Builds**
-   - Triggered by version tags
-   - Creates GitHub releases with artifacts
-   ```bash
-   git tag v9.1.23
-   git push origin v9.1.23
-   ```
+3. **Push Triggers**
+   - Triggered by changes to:
+     - Dockerfile
+     - scripts/**
+     - .github/workflows/drbd-build.yml
+     - .kernel-versions
+     - **.sh
 
 ### 2. Local Development
 
@@ -82,9 +83,9 @@ docker build -t drbd-builder .
 # Run with default settings
 docker run --rm -v $(pwd)/output:/root/output drbd-builder
 
-# Run with specific kernel versions
+# Run with specific EL minor version
 docker run --rm \
-    -e KERNEL_VERSIONS="5.14.0-554.el9 5.14.0-553.el9" \
+    --build-arg EL_MINOR_VERSION=5 \
     -v $(pwd)/output:/root/output \
     drbd-builder
 ```
@@ -95,33 +96,23 @@ docker run --rm \
 .
 ├── .github/
 │   └── workflows/
-│       └── drbd-build.yml    # GitHub Actions workflow
+│       ├── drbd-build.yml        # Main build workflow
+│       └── build-rpm-release.yml # Release workflow
 ├── scripts/
-│   ├── build-drbd.sh        # Main build script
-│   └── get-kernels.sh       # Kernel version detection
-├── Dockerfile               # Build environment definition
-├── build_drbd_rpm.yml      # Ansible playbook
-└── README.md               # This file
+│   ├── build-drbd.sh            # Main build script
+│   └── get-kernels.sh           # Kernel version detection
+├── Dockerfile                   # Build environment definition
+├── build_drbd_rpm.yml          # Ansible playbook
+└── README.md                   # This file
 ```
 
 ## Configuration
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DRBD_VERSION` | DRBD version to build | 9.1.23 |
-| `DRBD_RELEASE` | Release number | 1 |
-| `EL_VERSION` | Enterprise Linux version | 9 |
-| `KERNEL_VERSIONS` | Space-separated list of kernel versions | auto-detected |
 
 ### Build Arguments
 
 | Argument | Description | Default |
 |----------|-------------|---------|
-| `DRBD_VERSION` | DRBD version | 9.1.23 |
-| `DRBD_RELEASE` | Release number | 1 |
-| `EL_VERSION` | Enterprise Linux version | 9 |
+| `EL_MINOR_VERSION` | EL Minor Version (e.g., 5 for el9_5) | 5 |
 
 ## Output
 
@@ -133,27 +124,14 @@ The build process generates:
 
 2. **Build Reports**
    - Build status for each kernel version
-   - Located in `output/build_report.txt`
-
-3. **Metadata**
-   - Build information and configuration
-   - Located in `output/metadata.txt`
+   - Located in `output/build_report.md`
 
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch:
-   ```bash
-   git checkout -b feature/amazing-feature
-   ```
-3. Commit your changes:
-   ```bash
-   git commit -m 'Add amazing feature'
-   ```
-4. Push to the branch:
-   ```bash
-   git push origin feature/amazing-feature
-   ```
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
 5. Open a Pull Request
 
 ## License

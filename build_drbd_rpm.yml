@@ -3,11 +3,9 @@
   hosts: all
   become: yes
   vars:
-    drbd_version: "9.1.23"
-    drbd_release: "1"
-    el_version: "9"
-    docker_image_name: "drbd-rpm-builder"
-    docker_container_name: "drbd-rpm-container"
+    el_minor_version: "5"
+    docker_image_name: "drbd-builder"
+    docker_container_name: "drbd-builder"
     output_directory: "/root/output"
     ansible_user: ali
 
@@ -97,9 +95,7 @@
         build:
           path: /root/build
           args:
-            DRBD_VERSION: "{{ drbd_version }}"
-            DRBD_RELEASE: "{{ drbd_release }}"
-            EL_VERSION: "{{ el_version }}"
+            EL_MINOR_VERSION: "{{ el_minor_version }}"
         source: build
         state: present
       tags: build_image
@@ -138,7 +134,7 @@
       tags: build_image
 
     - name: Display build report
-      shell: cat {{ output_directory }}/build_report.txt
+      shell: cat {{ output_directory }}/build_report.md
       register: build_report
       tags: build_image
 
