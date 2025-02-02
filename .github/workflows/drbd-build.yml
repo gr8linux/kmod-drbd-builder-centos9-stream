@@ -5,24 +5,53 @@ on:
     - cron: '0 0 * * 0'  # Run weekly on Sunday
   workflow_dispatch:
     inputs:
-      drbd_version:
-        description: 'DRBD Version'
-        required: false
-        default: '9.1.23'
-      drbd_release:
-        description: 'DRBD Release'
-        required: false
-        default: '1'
+      force_build:
+        description: 'Force build even if no new kernel version'
+        type: boolean
+        default: false
   push:
-    tags:
-      - 'v*'
     paths:
       - 'Dockerfile'
       - 'scripts/**'
       - '.github/workflows/drbd-build.yml'
 
 jobs:
+  check-kernel-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      kernel_changed: ${{ steps.check-versions.outputs.kernel_changed }}
+      kernel_versions: ${{ steps.check-versions.outputs.kernel_versions }}
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get latest kernel versions
+        id: check-versions
+        run: |
+          # Create a temporary container to get kernel versions
+          docker build -t kernel-checker --target base .
+          CURRENT_VERSIONS=$(docker run --rm kernel-checker /usr/local/bin/get-kernels.sh)
+          
+          # Get previously built versions
+          PREV_VERSIONS=""
+          if [ -f ".kernel-versions" ]; then
+            PREV_VERSIONS=$(cat .kernel-versions)
+          fi
+          
+          # Compare versions
+          if [ "$CURRENT_VERSIONS" != "$PREV_VERSIONS" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "kernel_changed=true" >> $GITHUB_OUTPUT
+            echo "kernel_versions=$CURRENT_VERSIONS" >> $GITHUB_OUTPUT
+            echo "$CURRENT_VERSIONS" > .kernel-versions
+          else
+            echo "kernel_changed=false" >> $GITHUB_OUTPUT
+            echo "kernel_versions=$CURRENT_VERSIONS" >> $GITHUB_OUTPUT
+          fi
+
   build:
+    needs: check-kernel-versions
+    if: needs.check-kernel-versions.outputs.kernel_changed == 'true'
     runs-on: ubuntu-latest
     
     steps:
@@ -32,82 +61,68 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Set DRBD version variables
-        id: vars
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "DRBD_VERSION=${{ github.event.inputs.drbd_version }}" >> $GITHUB_ENV
-            echo "DRBD_RELEASE=${{ github.event.inputs.drbd_release }}" >> $GITHUB_ENV
-          else
-            echo "DRBD_VERSION=9.1.23" >> $GITHUB_ENV
-            echo "DRBD_RELEASE=1" >> $GITHUB_ENV
-          fi
-          echo "BUILD_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
-          
-          # Extract version from tag if present
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            TAG_VERSION=${GITHUB_REF#refs/tags/v}
-            echo "RELEASE_VERSION=${TAG_VERSION}" >> $GITHUB_ENV
-          fi
-
       - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           load: true
           tags: drbd-builder:latest
-          build-args: |
-            DRBD_VERSION=${{ env.DRBD_VERSION }}
-            DRBD_RELEASE=${{ env.DRBD_RELEASE }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Run DRBD build
         run: |
-          docker run --name drbd-builder drbd-builder
+          echo "${{ needs.check-kernel-versions.outputs.kernel_versions }}" > kernel_versions.txt
+          docker run --name drbd-builder \
+            -v $(pwd)/kernel_versions.txt:/tmp/kernel_versions.txt \
+            drbd-builder
+          
           mkdir -p output
           docker cp drbd-builder:/root/output/. output/
           docker rm drbd-builder
 
-      - name: Generate build metadata
+      - name: Generate build report
         run: |
-          echo "Build Information" > output/metadata.txt
-          echo "----------------" >> output/metadata.txt
-          echo "Date: ${{ env.BUILD_DATE }}" >> output/metadata.txt
-          echo "DRBD Version: ${{ env.DRBD_VERSION }}" >> output/metadata.txt
-          echo "DRBD Release: ${{ env.DRBD_RELEASE }}" >> output/metadata.txt
-          echo "Commit: ${{ github.sha }}" >> output/metadata.txt
-          echo "Workflow: ${{ github.workflow }}" >> output/metadata.txt
-          
-          # List all RPMs
-          echo -e "\nBuilt RPMs:" >> output/metadata.txt
-          find output/RPMS -type f -name "*.rpm" -exec basename {} \; >> output/metadata.txt
+          {
+            echo "# DRBD Kernel Module Build Report"
+            echo "## Build Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "## Kernel Versions:"
+            echo "${{ needs.check-kernel-versions.outputs.kernel_versions }}" | sed 's/^/- /'
+            echo -e "\n## Built Modules:"
+            find output/RPMS -type f -name "*.rpm" -exec basename {} \; | sed 's/^/- /'
+          } > output/build_report.md
 
       - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          name: DRBD ${{ env.RELEASE_VERSION }}
-          body_path: output/metadata.txt
+          name: "Kernel Modules Build $(date +'%Y-%m-%d')"
+          tag_name: "build-$(date +'%Y%m%d-%H%M')"
+          body_path: output/build_report.md
           files: |
             output/RPMS/x86_64/*.rpm
-            output/build_report.txt
-            output/metadata.txt
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload build artifacts
-        if: "!startsWith(github.ref, 'refs/tags/')"
         uses: actions/upload-artifact@v3
         with:
-          name: drbd-rpms-${{ env.BUILD_DATE }}
+          name: drbd-modules-$(date +'%Y%m%d-%H%M')
           path: |
             output/RPMS/x86_64/*.rpm
-            output/build_report.txt
-            output/metadata.txt
+            output/build_report.md
           retention-days: 7
+
+      - name: Update kernel versions file
+        if: success()
+        run: |
+          echo "${{ needs.check-kernel-versions.outputs.kernel_versions }}" > .kernel-versions
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add .kernel-versions
+          git commit -m "Update kernel versions [skip ci]"
+          git push
 
       - name: Notify on failure
         if: failure()
@@ -117,6 +132,6 @@ jobs:
             const issue = await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `Build failed: DRBD RPM build on ${process.env.BUILD_DATE}`,
-              body: `Build failed for DRBD version ${process.env.DRBD_VERSION}\n\nSee workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+              title: `Build failed: Kernel modules build on ${new Date().toISOString().split('T')[0]}`,
+              body: `Build failed for kernel versions:\n${process.env.KERNEL_VERSIONS}\n\nSee workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
             }); 

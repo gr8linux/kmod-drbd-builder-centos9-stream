@@ -55,8 +55,13 @@ main() {
     # Download SRPM
     download_srpm
     
-    # Get kernel versions
-    mapfile -t KERNEL_VERSIONS < <(/usr/local/bin/get-kernels.sh)
+    # Read kernel versions from file if it exists
+    if [ -f "${KERNEL_VERSION_FILE}" ]; then
+        mapfile -t KERNEL_VERSIONS < "${KERNEL_VERSION_FILE}"
+    else
+        # Fallback to get-kernels.sh
+        mapfile -t KERNEL_VERSIONS < <(/usr/local/bin/get-kernels.sh)
+    fi
     
     # Create build report file
     echo "DRBD Build Report" > ${OUTPUT_DIR}/build_report.txt
