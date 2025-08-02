@@ -11,10 +11,10 @@ RUN chmod +x /usr/local/bin/get-kernels.sh
 FROM dokken/centos-stream-9
 
 # Build arguments with defaults
-ARG DRBD_VERSION=9.1.23
-ARG DRBD_RELEASE=1
+ARG DRBD_VERSION=9.2.13
+ARG DRBD_RELEASE=5
 ARG EL_VERSION=9
-ARG EL_MINOR_VERSION=5  # Added for CentOS Stream 9.5
+ARG EL_MINOR_VERSION=6  # Added for CentOS Stream 9.5
 
 # Runtime environment variables
 ENV DRBD_VERSION=${DRBD_VERSION}

@@ -3,7 +3,7 @@
   hosts: all
   become: yes
   vars:
-    el_minor_version: "5"
+    el_minor_version: "6"
     docker_image_name: "drbd-builder"
     docker_container_name: "drbd-builder"
     output_directory: "/root/output"
