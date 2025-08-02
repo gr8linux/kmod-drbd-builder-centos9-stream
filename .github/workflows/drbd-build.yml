@@ -12,7 +12,7 @@ on:
       el_minor_version:
         description: 'EL Minor Version (e.g., 5 for el9_5)'
         type: string
-        default: '5'
+        default: '6'
   push:
     paths:
       - 'Dockerfile'
