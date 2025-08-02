@@ -72,5 +72,6 @@ RUN mkdir -p ${OUTPUT_DIR}/reports
 WORKDIR ${RPMBUILD_DIR}
 # Set no debugfs it will broke the build on newer kernel
 ENV CONFIG_DRBD_DEBUG_FS=n
+ENV EXTRA_CFLAGS="-DCONFIG_DRBD_DEBUG_FS=0"
 # Default command to build DRBD modules
 ENTRYPOINT ["/usr/local/bin/build-drbd.sh"]
