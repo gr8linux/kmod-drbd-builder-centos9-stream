@@ -21,6 +21,10 @@ on:
       - '.kernel-versions'
       - '**.sh'
 
+env:
+  EL_MINOR_VERSION: ${{ github.event.inputs.el_minor_version || '6' }}
+  FORCE_BUILD: ${{ github.event.inputs.force_build || 'false' }}
+
 jobs:
   check-kernel-versions:
     runs-on: ubuntu-latest
@@ -31,7 +35,7 @@ jobs:
     steps:
       - name: Download DRBD SRPM
         run: |
-          SRPM_URL="https://elrepo.org/linux/elrepo/el9/SRPMS/kmod-drbd9x-9.2.13-5.el9_${{ github.event.inputs.el_minor_version || '5' }}.elrepo.src.rpm"
+          SRPM_URL="https://elrepo.org/linux/elrepo/el9/SRPMS/kmod-drbd9x-9.2.13-5.el9_${EL_MINOR_VERSION}.elrepo.src.rpm"
           echo "Downloading SRPM from: $SRPM_URL"
           curl -L -o drbd.src.rpm "$SRPM_URL"
           if [ $? -ne 0 ]; then
@@ -45,18 +49,16 @@ jobs:
       - name: Get latest kernel versions
         id: check-versions
         run: |
-          # Debug output
-          echo "Building version-checker..."
+          echo "Building version-checker for EL minor: ${EL_MINOR_VERSION}"
           docker build \
             --target version-checker \
-            --build-arg EL_MINOR_VERSION=${{ github.event.inputs.el_minor_version || '5' }} \
+            --build-arg EL_MINOR_VERSION=${EL_MINOR_VERSION} \
             -t kernel-checker .
           
           echo "Getting current versions..."
           CURRENT_VERSIONS=$(docker run --rm kernel-checker /usr/local/bin/get-kernels.sh)
           echo "Current versions: $CURRENT_VERSIONS"
           
-          # Get previously built versions
           PREV_VERSIONS=""
           if [ -f ".kernel-versions" ]; then
             PREV_VERSIONS=$(cat .kernel-versions)
@@ -65,109 +67,11 @@ jobs:
             echo "No previous versions file found"
           fi
           
-          # Compare versions
-          if [ "$CURRENT_VERSIONS" != "$PREV_VERSIONS" ] || [ "${{ github.event.inputs.force_build }}" == "true" ]; then
-            echo "Changes detected or force build enabled"
+          if [ "$CURRENT_VERSIONS" != "$PREV_VERSIONS" ] || [ "${FORCE_BUILD}" == "true" ]; then
             echo "kernel_changed=true" >> $GITHUB_OUTPUT
             echo "kernel_versions=$CURRENT_VERSIONS" >> $GITHUB_OUTPUT
             echo "$CURRENT_VERSIONS" > .kernel-versions
           else
-            echo "No changes detected and force build not enabled"
             echo "kernel_changed=false" >> $GITHUB_OUTPUT
             echo "kernel_versions=$CURRENT_VERSIONS" >> $GITHUB_OUTPUT
           fi
-
-  build:
-    needs: check-kernel-versions
-    if: needs.check-kernel-versions.outputs.kernel_changed == 'true'
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          load: true
-          tags: drbd-builder:latest
-          build-args: |
-            EL_MINOR_VERSION=${{ github.event.inputs.el_minor_version || '5' }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Run DRBD build
-        run: |
-          echo "${{ needs.check-kernel-versions.outputs.kernel_versions }}" > kernel_versions.txt
-          docker run --name drbd-builder \
-            -v $(pwd)/kernel_versions.txt:/tmp/kernel_versions.txt \
-            drbd-builder
-          
-          mkdir -p output
-          docker cp drbd-builder:/root/output/. output/
-          docker rm drbd-builder
-
-      - name: Generate build report
-        run: |
-          {
-            echo "# DRBD Kernel Module Build Report"
-            echo "## Build Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-            echo "## Kernel Versions:"
-            echo "${{ needs.check-kernel-versions.outputs.kernel_versions }}" | sed 's/^/- /'
-            echo -e "\n## Built Modules:"
-            find output/RPMS -type f -name "*.rpm" -exec basename {} \; | sed 's/^/- /'
-          } > output/build_report.md
-
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: build-${{ github.run_number }}
-          name: Build ${{ github.run_number }}
-          body_path: output/build_report.md
-          files: |
-            output/RPMS/x86_64/*.rpm
-          draft: false
-          prerelease: false
-
-      - name: Generate timestamp
-        id: timestamp
-        run: echo "timestamp=$(date +'%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
-
-      - name: Upload build artifacts
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: drbd-rpms
-          path: |
-            output/RPMS/x86_64/*.rpm
-            output/build_report.md
-          retention-days: 7
-
-      - name: Update kernel versions file
-        if: success()
-        run: |
-          echo "${{ needs.check-kernel-versions.outputs.kernel_versions }}" > .kernel-versions
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add .kernel-versions
-          git commit -m "Update kernel versions [skip ci]"
-          git push
-
-      - name: Notify on failure
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const issue = await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `Build failed: Kernel modules build on ${new Date().toISOString().split('T')[0]}`,
-              body: `Build failed for kernel versions:\n${process.env.KERNEL_VERSIONS}\n\nSee workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
-            }); 
