@@ -14,7 +14,7 @@ FROM dokken/centos-stream-9
 ARG DRBD_VERSION=9.2.13
 ARG DRBD_RELEASE=5
 ARG EL_VERSION=9
-ARG EL_MINOR_VERSION=6  # Added for CentOS Stream 9.5
+ARG EL_MINOR_VERSION=6
 
 # Runtime environment variables
 ENV DRBD_VERSION=${DRBD_VERSION}
@@ -70,6 +70,7 @@ RUN mkdir -p ${OUTPUT_DIR}/reports
 
 # Set working directory to RPMBUILD_DIR
 WORKDIR ${RPMBUILD_DIR}
-
+# Set no debugfs it will broke the build on newer kernel
+ENV CONFIG_DRBD_DEBUG_FS=n
 # Default command to build DRBD modules
 ENTRYPOINT ["/usr/local/bin/build-drbd.sh"]
